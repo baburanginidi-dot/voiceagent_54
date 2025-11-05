@@ -1,0 +1,7 @@
+{
+  "name": "Maya Voice Onboarding Agent",
+  "description": "A voice-centric onboarding experience powered by Gemini. Guide users through a multi-stage setup process with a friendly, human-like voice agent named Maya.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
