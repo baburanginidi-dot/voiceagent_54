@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 interface VoiceAgentVisualizerProps {
@@ -29,7 +28,7 @@ const VoiceAgentVisualizer: React.FC<VoiceAgentVisualizerProps> = ({ isSpeaking,
             </defs>
             <circle cx="50" cy="50" r="48" stroke="url(#gradient)" strokeWidth="3" fill="none" />
         </svg>
-      <div className="text-white font-bold text-lg z-10">Maya</div>
+      <div className="text-black font-bold text-lg z-10">Maya</div>
     </div>
   );
 };

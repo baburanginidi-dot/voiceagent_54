@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 interface CtaButtonsProps {
@@ -8,10 +7,10 @@ interface CtaButtonsProps {
 const CTAS_BY_STAGE: Record<number, string[]> = {
     1: ["I'm ready, let's start ✅"],
     2: ["Got it, continue →"],
-    3: ["I prefer 0% EMI", "I'll pay in full now", "I'll use a credit card"],
-    4: ["Proceed with NBFC option", "I want to know more"],
-    5: ["Add Co-Applicant →", "I'll get help from an expert"],
-    6: ["Open KYC Portal Link ✅", "Wait for Expert Guidance"],
+    3: ["I'd prefer 0% EMI", "I'll pay in full now", "I'll use a credit card"],
+    4: ["Continue with NBFC option", "I want to know more"],
+    5: ["Add a co-applicant →", "I'll get expert help"],
+    6: ["Open KYC portal link ✅", "Wait for expert guidance"],
 };
 
 const CtaButtons: React.FC<CtaButtonsProps> = ({ stage }) => {

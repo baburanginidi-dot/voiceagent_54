@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 // FIX: Remove LiveSession from import as it is not an exported member.
 import { GoogleGenAI, LiveServerMessage, Modality, FunctionDeclaration, Type, Blob } from '@google/genai';
@@ -8,6 +7,7 @@ import ProgressStepper from './components/ProgressStepper';
 import VoiceAgentVisualizer from './components/VoiceAgentVisualizer';
 import ConversationLog from './components/ConversationLog';
 import CtaButtons from './components/CtaButtons';
+import CallControls from './components/CallControls';
 
 // --- Audio Helper Functions (as per Gemini docs) ---
 function decode(base64: string): Uint8Array {
@@ -67,18 +67,25 @@ const App: React.FC = () => {
     const [conversation, setConversation] = useState<Message[]>([]);
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [isListening, setIsListening] = useState(false);
+    const [isMuted, setIsMuted] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     // FIX: Use the inferred type for the session promise ref.
     const sessionPromiseRef = useRef<LiveSessionPromise | null>(null);
     const outputAudioContextRef = useRef<AudioContext | null>(null);
     const outputNodeRef = useRef<GainNode | null>(null);
+    const mediaStreamRef = useRef<MediaStream | null>(null);
     
     const currentInputTranscriptionRef = useRef('');
     const currentOutputTranscriptionRef = useRef('');
+    const isMutedRef = useRef(false);
     
     const nextStartTimeRef = useRef(0);
     const sourcesRef = useRef(new Set<AudioBufferSourceNode>());
+
+    useEffect(() => {
+        isMutedRef.current = isMuted;
+    }, [isMuted]);
 
     const updateOnboardingStageFunctionDeclaration: FunctionDeclaration = {
         name: 'updateOnboardingStage',
@@ -96,8 +103,20 @@ const App: React.FC = () => {
     };
 
     const handleStartOnboarding = async () => {
-        setHasStarted(true);
         setError(null);
+        try {
+            const hasKey = await (window as any).aistudio.hasSelectedApiKey();
+            if (!hasKey) {
+                await (window as any).aistudio.openSelectKey();
+                // We assume the key is now available for the next step.
+            }
+        } catch (e) {
+             console.error("API key selection error:", e);
+             setError("Could not verify API key. Please try again.");
+             return;
+        }
+
+        setHasStarted(true);
 
         if (!outputAudioContextRef.current) {
             try {
@@ -137,10 +156,12 @@ const App: React.FC = () => {
         setIsListening(true);
         const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaStreamRef.current = stream;
         const source = inputAudioContext.createMediaStreamSource(stream);
         const scriptProcessor = inputAudioContext.createScriptProcessor(4096, 1, 1);
         
         scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
+            if (isMutedRef.current) return;
             const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
             const pcmBlob = createBlob(inputData);
             if (sessionPromiseRef.current) {
@@ -224,7 +245,7 @@ const App: React.FC = () => {
 
     const onerror = useCallback((e: ErrorEvent) => {
         console.error('Session error:', e);
-        setError('A connection error occurred. Please try restarting the session.');
+        setError('A connection error occurred. This could be due to a network issue or an invalid API key. Please check your connection, ensure you have selected a valid API key, and try again.');
         setIsListening(false);
         setIsSpeaking(false);
         setHasStarted(false);
@@ -235,6 +256,34 @@ const App: React.FC = () => {
         setIsSpeaking(false);
     }, []);
     
+    const handleMuteToggle = () => {
+        setIsMuted(prev => !prev);
+    };
+
+    const handleEndCall = () => {
+        if (sessionPromiseRef.current) {
+            sessionPromiseRef.current.then(session => session.close());
+            sessionPromiseRef.current = null;
+        }
+        if (mediaStreamRef.current) {
+            mediaStreamRef.current.getTracks().forEach(track => track.stop());
+            mediaStreamRef.current = null;
+        }
+        sourcesRef.current.forEach(source => source.stop());
+        sourcesRef.current.clear();
+
+        // Reset to initial state
+        setHasStarted(false);
+        setCurrentStage(0);
+        setConversation([]);
+        setIsSpeaking(false);
+        setIsListening(false);
+        setError(null);
+        setIsMuted(false);
+        setStudentName('');
+        setStudentMobileNo('');
+    };
+
     useEffect(() => {
         return () => {
             if (sessionPromiseRef.current) {
@@ -249,7 +298,7 @@ const App: React.FC = () => {
             {!hasStarted ? (
                 <div className="text-center w-full max-w-md mx-auto">
                     <h1 className="text-4xl font-bold text-gray-800 mb-2">Welcome to NxtWave Onboarding</h1>
-                    <p className="text-lg text-gray-600 mb-8">Meet Maya, your voice assistant learning portel access.</p>
+                    <p className="text-lg text-gray-600 mb-8">Meet Maya, your voice assistant for accessing your learning portal.</p>
                     <div className="space-y-4 text-left">
                         <div>
                             <label htmlFor="studentName" className="block text-sm font-medium text-gray-700">
@@ -260,8 +309,8 @@ const App: React.FC = () => {
                                 id="studentName"
                                 value={studentName}
                                 onChange={(e) => setStudentName(e.target.value)}
-                                className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                                placeholder="e.g., Jane Doe"
+                                className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                placeholder="e.g., John Doe"
                                 required
                             />
                         </div>
@@ -274,7 +323,7 @@ const App: React.FC = () => {
                                 id="studentMobileNo"
                                 value={studentMobileNo}
                                 onChange={(e) => setStudentMobileNo(e.target.value)}
-                                className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                                 placeholder="e.g., 9876543210"
                                 required
                             />
@@ -295,6 +344,11 @@ const App: React.FC = () => {
                     <VoiceAgentVisualizer isSpeaking={isSpeaking} isListening={isListening} />
                     <ConversationLog messages={conversation} />
                     <CtaButtons stage={currentStage} />
+                    <CallControls
+                        isMuted={isMuted}
+                        onMuteToggle={handleMuteToggle}
+                        onEndCall={handleEndCall}
+                    />
                     {error && <p className="text-red-500 mt-4">{error}</p>}
                 </>
             )}
